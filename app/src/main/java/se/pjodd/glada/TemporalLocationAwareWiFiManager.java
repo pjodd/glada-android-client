@@ -36,7 +36,7 @@ public class TemporalLocationAwareWiFiManager {
                 long timestampBootEpochMilliseconds = java.lang.System.currentTimeMillis() - android.os.SystemClock.elapsedRealtime();
                 long timestampScanResultEpochMilliseconds = timestampBootEpochMilliseconds + (scanResult.timestamp / 1000L);
 
-                if (!filterReceive(timestampScanResultEpochMilliseconds, scanResult)) {
+                if (!accept(timestampScanResultEpochMilliseconds, scanResult)) {
                     continue;
                 }
 
@@ -60,7 +60,7 @@ public class TemporalLocationAwareWiFiManager {
      * @param scanResult
      * @return true if the scan result is to be considered for temporal location lookup
      */
-    public boolean filterReceive(long timestamp, ScanResult scanResult) {
+    public boolean accept(long timestamp, ScanResult scanResult) {
         return true;
     }
 
@@ -89,5 +89,16 @@ public class TemporalLocationAwareWiFiManager {
         context.unregisterReceiver(wifiReceiver);
         locationManager.stop();
     }
+
+    public static int convertFrequencyToChannel(int freq) {
+        if (freq >= 2412 && freq <= 2484) {
+            return (freq - 2412) / 5 + 1;
+        } else if (freq >= 5170 && freq <= 5825) {
+            return (freq - 5170) / 5 + 34;
+        } else {
+            return -1;
+        }
+    }
+
 
 }

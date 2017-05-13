@@ -37,8 +37,8 @@ public class TrackerService extends Service {
 
         wifiManager = new TemporalLocationAwareWiFiManager(getApplicationContext()) {
             @Override
-            public boolean filterReceive(long timestamp, ScanResult scanResult) {
-                return (convertFrequencyToChannel(scanResult.frequency) == 1
+            public boolean accept(long timestamp, ScanResult scanResult) {
+                return (TemporalLocationAwareWiFiManager.convertFrequencyToChannel(scanResult.frequency) == 1
                         && "pjodd.se".equals(scanResult.SSID));
             }
 
@@ -73,15 +73,6 @@ public class TrackerService extends Service {
         db.close();
     }
 
-    public static int convertFrequencyToChannel(int freq) {
-        if (freq >= 2412 && freq <= 2484) {
-            return (freq - 2412) / 5 + 1;
-        } else if (freq >= 5170 && freq <= 5825) {
-            return (freq - 5170) / 5 + 34;
-        } else {
-            return -1;
-        }
-    }
 
 
 }

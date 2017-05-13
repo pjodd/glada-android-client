@@ -7,6 +7,9 @@ import android.database.sqlite.SQLiteDatabase;
 import android.net.wifi.ScanResult;
 import android.os.IBinder;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import se.pjodd.glada.db.DatabaseContract;
 import se.pjodd.glada.db.DatabaseHelper;
 
@@ -27,6 +30,8 @@ public class TrackerService extends Service {
 
     private TemporalLocationAwareWiFiManager wifiManager;
 
+    private Grid grid = new Grid(0.01d);
+    private Map<Long, GridCellData> data = new HashMap<>();
 
     @Override
     public void onCreate() {
@@ -44,20 +49,21 @@ public class TrackerService extends Service {
 
             @Override
             public void onReceive(long timestamp, ScanResult scanResult, TemporalLocationManager.Position position) {
-                ContentValues values = new ContentValues();
-                values.put(DatabaseContract.Entry.COLUMN_NAME_TIMESTAMP, timestamp);
-                values.put(DatabaseContract.Entry.COLUMN_NAME_SSID, scanResult.SSID);
-                values.put(DatabaseContract.Entry.COLUMN_NAME_BSSID, scanResult.BSSID);
-                values.put(DatabaseContract.Entry.COLUMN_NAME_DBM, scanResult.level);
-                values.put(DatabaseContract.Entry.COLUMN_NAME_FREQUENCY, scanResult.frequency);
-                values.put(DatabaseContract.Entry.COLUMN_NAME_LATITUDE, position.getLatitude());
-                values.put(DatabaseContract.Entry.COLUMN_NAME_LONGITUDE, position.getLongitude());
-                values.put(DatabaseContract.Entry.COLUMN_NAME_ACCURACY, position.getAccuracy());
-                values.put(DatabaseContract.Entry.COLUMN_NAME_PDOP, position.getPdop());
-
-                // Insert the new row, returning the primary key value of the new row
-                long newRowId = db.insert(DatabaseContract.Entry.TABLE_NAME, null, values);
-
+                Grid.Cell cell = grid.getCell(position.getLatitude(), position.getLongitude());
+                GridCellData cellData = data.get(cell.getIdentity());
+                if (cellData == null) {
+                    cellData = new GridCellData();
+                    cellData.setAccuracy(position.getAccuracy());
+                    cellData.setdBm(scanResult.level);
+                    cellData.setTimestamp(timestamp);
+                    cellData.setPdop(position.getPdop());
+                    data.put(cell.getIdentity(), cellData);
+                } else if (cellData.getAccuracy() >= position.getAccuracy()) {
+                    cellData.setAccuracy(position.getAccuracy());
+                    cellData.setdBm(scanResult.level);
+                    cellData.setTimestamp(timestamp);
+                    cellData.setPdop(position.getPdop());
+                }
             }
         };
 

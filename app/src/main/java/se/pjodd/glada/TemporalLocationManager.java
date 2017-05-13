@@ -75,10 +75,26 @@ public class TemporalLocationManager {
             if (memory.isEmpty()) {
                 return null;
             }
-            int index = Collections.binarySearch(memory, new Position(timestamp, -1d, -1d, -1f, -1d), timestampPositionComparator);
-            if (index < 0) {
-                index *= -1;
+            int index = memory.size() - 1;
+            {
+                long distanceToClosestIndex = Long.MAX_VALUE;
+                for (int i = memory.size() - 1; i > 0; i--) {
+                    long distance = timestamp - memory.get(i).getTimestamp();
+                    if (distance < 0) {
+                        distance *= -1;
+                    }
+                    if (distance <= distanceToClosestIndex) {
+                        index = i;
+                        distanceToClosestIndex = distance;
+                    } else {
+                        break;
+                    }
+                }
             }
+//            int index = Collections.binarySearch(memory, new Position(timestamp, -1d, -1d, -1f, -1d), timestampPositionComparator);
+//            if (index < 0) {
+//                index *= -1;
+//            }
             Position p1 = memory.get(index);
             if (timestamp == p1.getTimestamp()) {
                 return p1;
@@ -126,8 +142,8 @@ public class TemporalLocationManager {
     private LocationListener locationListener = new LocationListener() {
         public void onLocationChanged(Location location) {
 
-            if (nmeaListener.getPdop() != null && maximumPdop <= nmeaListener.getPdop()
-                    && maximumAccuracy <= location.getAccuracy()) {
+            if (nmeaListener.getPdop() != null && maximumPdop >= nmeaListener.getPdop()
+                    && maximumAccuracy >= location.getAccuracy()) {
 
                 synchronized (memory) {
                     memory.add(new Position(
@@ -189,6 +205,23 @@ public class TemporalLocationManager {
         public double getPdop() {
             return pdop;
         }
+
+
     }
 
+    public float getMaximumPdop() {
+        return maximumPdop;
+    }
+
+    public void setMaximumPdop(float maximumPdop) {
+        this.maximumPdop = maximumPdop;
+    }
+
+    public float getMaximumAccuracy() {
+        return maximumAccuracy;
+    }
+
+    public void setMaximumAccuracy(float maximumAccuracy) {
+        this.maximumAccuracy = maximumAccuracy;
+    }
 }

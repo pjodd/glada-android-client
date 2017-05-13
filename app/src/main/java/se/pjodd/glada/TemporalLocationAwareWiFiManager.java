@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
+import android.os.SystemClock;
 
 import java.util.List;
 
@@ -20,6 +21,8 @@ public class TemporalLocationAwareWiFiManager {
     private WifiManager wifiManager;
     private TemporalLocationManager locationManager;
 
+    private long timestampScanningStarted = Long.MIN_VALUE;
+
     public TemporalLocationAwareWiFiManager(Context context) {
         this.context = context;
         wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
@@ -30,23 +33,29 @@ public class TemporalLocationAwareWiFiManager {
         @Override
         public void onReceive(Context context, Intent intent) {
 
+            long timestampScanResultsReceived = System.currentTimeMillis();
+            long millisecondsScanning = timestampScanResultsReceived - timestampScanningStarted;
+            long timestampBestGuess = (millisecondsScanning / 2) + timestampScanningStarted;
+
+            // so the scan result timestamp is no way to be trusted.
+            // sometimes it's right on spot, sometimes it reports days in the past, sometimes weeks in the future.
+            // so we scan as often as we can and keep track of during what time we did that.
+
             List<ScanResult> results = wifiManager.getScanResults();
             for (ScanResult scanResult : results) {
 
-                long timestampBootEpochMilliseconds = java.lang.System.currentTimeMillis() - android.os.SystemClock.elapsedRealtime();
-                long timestampScanResultEpochMilliseconds = timestampBootEpochMilliseconds + (scanResult.timestamp / 1000L);
-
-                if (!accept(timestampScanResultEpochMilliseconds, scanResult)) {
+                if (!accept(timestampBestGuess, scanResult)) {
                     continue;
                 }
 
-                TemporalLocationManager.Position position = locationManager.getLocation(timestampScanResultEpochMilliseconds);
+                TemporalLocationManager.Position position = locationManager.getLocation(timestampBestGuess);
                 if (position != null) {
-                    TemporalLocationAwareWiFiManager.this.onReceive(timestampScanResultEpochMilliseconds, scanResult, position);
+                    TemporalLocationAwareWiFiManager.this.onReceive(timestampBestGuess, scanResult, position);
                 }
             }
 
             // immediately trigger next scan
+            timestampScanningStarted = System.currentTimeMillis();
             wifiManager.startScan();
 
         }
@@ -79,6 +88,7 @@ public class TemporalLocationAwareWiFiManager {
         }
 
         context.registerReceiver(wifiReceiver, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
+        timestampScanningStarted = System.currentTimeMillis();
         wifiManager.startScan();
 
 

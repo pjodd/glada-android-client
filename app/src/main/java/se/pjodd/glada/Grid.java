@@ -100,10 +100,14 @@ public class Grid {
         return new Cell(top, left);
     }
 
-    public Cell getCell(Coordinate coordinate) {
-        long top = (long) ((90d - coordinate.getLatitude()) / latitudeStep);
-        long left = (long) ((coordinate.getLongitude() - -180d) / longitudeStep);
+    public Cell getCell(double latitude, double longitude) {
+        long top = (long) ((90d - latitude) / latitudeStep);
+        long left = (long) ((longitude - -180d) / longitudeStep);
         return new Cell(top, left);
+    }
+
+    public Cell getCell(Coordinate coordinate) {
+        return getCell(coordinate.getLatitude(), coordinate.getLongitude());
     }
 
 

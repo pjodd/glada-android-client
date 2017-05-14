@@ -144,13 +144,15 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
             if (updateLocationCircle) {
                 updateLocationCircle();
             }
-
-            Message message = Message.obtain(null, TrackerService.REQUEST_GRID_DATA_DELTA, 1, 1);
-            message.replyTo = gridDataMessenger;
-            try {
-                msgService.send(message);
-            } catch (android.os.RemoteException re) {
-                Log.e("MainActivity", "Unable to request grid data delta", re);
+            // todo this should never be null!!! but it is
+            if (msgService != null) {
+                Message message = Message.obtain(null, TrackerService.REQUEST_GRID_DATA_DELTA, 1, 1);
+                message.replyTo = gridDataMessenger;
+                try {
+                    msgService.send(message);
+                } catch (android.os.RemoteException re) {
+                    Log.e("MainActivity", "Unable to request grid data delta", re);
+                }
             }
 
         }
@@ -165,6 +167,10 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
     }
 
     private void updateLocationCircle(Location location) {
+
+        if (location == null) {
+            return;
+        }
 
         if (mMap != null) {
             if (locationCircle != null) {
@@ -274,19 +280,31 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
 
+        if (lastKnownLocation != null) {
 
-        updateLocationCircle();
+            updateLocationCircle();
 
-        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude()), 13));
+            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude()), 13));
 
-        CameraPosition cameraPosition = new CameraPosition.Builder()
-                .target(new LatLng(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude()))      // Sets the center of the map to location user
-                .zoom(17)                   // Sets the zoom
-                .bearing(90)                // Sets the orientation of the camera to east
-                .tilt(40)                   // Sets the tilt of the camera to 30 degrees
-                .build();                   // Creates a CameraPosition from the builder
-        mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
+            CameraPosition cameraPosition = new CameraPosition.Builder()
+                    .target(new LatLng(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude()))      // Sets the center of the map to location user
+                    .zoom(17)                   // Sets the zoom
+                    .bearing(90)                // Sets the orientation of the camera to east
+                    .tilt(40)                   // Sets the tilt of the camera to 30 degrees
+                    .build();                   // Creates a CameraPosition from the builder
+            mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
+        } else {
+            // zoom to malmö
 
+            CameraPosition cameraPosition = new CameraPosition.Builder()
+                    .target(new LatLng(55.6d, 13d))      // Sets the center of the map to malmö
+                    .zoom(15)                   // Sets the zoom
+                    .bearing(90)                // Sets the orientation of the camera to east
+                    .tilt(40)                   // Sets the tilt of the camera to 30 degrees
+                    .build();                   // Creates a CameraPosition from the builder
+            mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
+
+        }
 
     }
 

@@ -47,7 +47,7 @@ import se.pjodd.glada.db.DatabaseHelper;
 
 import static se.pjodd.glada.R.id.map;
 
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
+public class MainActivity extends FragmentActivity implements OnMapReadyCallback {
 
     private boolean pjoddInRange = false;
 
@@ -139,18 +139,18 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
             }
 
-            boolean updateLocationCircle = MapsActivity.this.pjoddInRange != pjoddInRange;
-            MapsActivity.this.pjoddInRange = pjoddInRange;
+            boolean updateLocationCircle = MainActivity.this.pjoddInRange != pjoddInRange;
+            MainActivity.this.pjoddInRange = pjoddInRange;
             if (updateLocationCircle) {
                 updateLocationCircle();
             }
 
             Message message = Message.obtain(null, TrackerService.REQUEST_GRID_DATA_DELTA, 1, 1);
-            message.replyTo = serviceResultMessenger;
+            message.replyTo = gridDataMessenger;
             try {
                 msgService.send(message);
             } catch (android.os.RemoteException re) {
-                Log.e("MapsActivity", "Unable to request grid data delta", re);
+                Log.e("MainActivity", "Unable to request grid data delta", re);
             }
 
         }
@@ -244,13 +244,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         registerReceiver(wifiReceiver, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
         wifiManager.startScan();
 
-        Message message = Message.obtain(null, TrackerService.REQUEST_GRID_DATA, 1, 1);
-        message.replyTo = serviceResultMessenger;
-        try {
-            msgService.send(message);
-        } catch (android.os.RemoteException re) {
-            Log.e("MapsActivity", "Unable to request grid data", re);
-        }
 
 
     }
@@ -320,12 +313,21 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         public void onServiceConnected(ComponentName name, IBinder service) {
             isBound = true;
             msgService = new Messenger(service);
+
+            requestAllGridData();
         }
     };
 
-    Messenger serviceResultMessenger = new Messenger(new ServiceResultHandler());
+    Messenger gridDataMessenger = new Messenger(new GridDataHandler(this));
 
-    private class ServiceResultHandler extends Handler {
+    private static class GridDataHandler extends Handler {
+
+        private MainActivity mainActivity;
+
+        public GridDataHandler(MainActivity mainActivity) {
+            this.mainActivity = mainActivity;
+        }
+
         @Override
         public void handleMessage(Message msg) {
             super.handleMessage(msg);
@@ -335,7 +337,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             int dBm = msg.getData().getInt("dBm");
             double pdop = msg.getData().getDouble("pdop");
 
-            GridCellData cellData = data.get(cellIdentity);
+            GridCellData cellData = mainActivity.gridData.get(cellIdentity);
             if (cellData != null) {
                 cellData.getPolygon().remove();
                 cellData.setTimestamp(timestamp);
@@ -348,10 +350,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 cellData.setAccuracy(accuracy);
                 cellData.setdBm(dBm);
                 cellData.setPdop(pdop);
-                data.put(cellIdentity, cellData);
+                mainActivity.gridData.put(cellIdentity, cellData);
             }
 
-            Grid.Cell cell = grid.getCell(cellIdentity);
+            Grid.Cell cell = mainActivity.grid.getCell(cellIdentity);
             Grid.Envelope envelope = cell.getEnvelope();
 
             PolygonOptions polygonOptions = new PolygonOptions();
@@ -362,16 +364,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     new LatLng(envelope.getSouthwest().getLatitude(), envelope.getNortheast().getLongitude()),
                     new LatLng(envelope.getSouthwest().getLatitude(), envelope.getSouthwest().getLongitude())
             );
-            int color = Gradient.TEN[WifiManager.calculateSignalLevel(cellData.getdBm(), 10)];
+            int color = Gradient.TEN_RED_YELLOW_GREEN[WifiManager.calculateSignalLevel(cellData.getdBm(), 10)];
             polygonOptions.fillColor(color);
             polygonOptions.strokeColor(color);
             polygonOptions.strokeWidth(1); // px
-            cellData.setPolygon(mMap.addPolygon(polygonOptions));
+            cellData.setPolygon(mainActivity.mMap.addPolygon(polygonOptions));
         }
     }
 
     private Grid grid = new Grid(0.003d);
-    private Map<Long, GridCellData> data = new HashMap<>();
+    private Map<Long, GridCellData> gridData = new HashMap<>();
 
     private static class GridCellData extends se.pjodd.glada.GridCellData {
         private Polygon polygon;
@@ -382,6 +384,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         public void setPolygon(Polygon polygon) {
             this.polygon = polygon;
+        }
+    }
+
+    private void requestAllGridData() {
+        Message message = Message.obtain(null, TrackerService.REQUEST_GRID_DATA, 1, 1);
+        message.replyTo = gridDataMessenger;
+        try {
+            msgService.send(message);
+        } catch (android.os.RemoteException re) {
+            Log.e("MainActivity", "Unable to request grid data", re);
         }
     }
 }

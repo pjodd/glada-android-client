@@ -150,6 +150,8 @@ public class TrackerService extends Service {
         super.onCreate();
         messenger = new Messenger(new IncomingRequestHandler(this));
         databaseHelper = new DatabaseHelper(getApplicationContext());
+
+        // todo load grid data from database
     }
 
     @Override

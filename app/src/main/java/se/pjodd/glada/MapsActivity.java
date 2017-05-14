@@ -2,10 +2,11 @@ package se.pjodd.glada;
 
 import android.Manifest;
 import android.content.BroadcastReceiver;
-import android.content.ContentValues;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Color;
@@ -14,11 +15,15 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
+import android.os.Handler;
+import android.os.IBinder;
+import android.os.Message;
+import android.os.Messenger;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
-import android.view.View;
+import android.util.Log;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -31,12 +36,13 @@ import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.Circle;
 import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.Polygon;
+import com.google.android.gms.maps.model.PolygonOptions;
 
-import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
-import se.pjodd.glada.db.DatabaseContract;
 import se.pjodd.glada.db.DatabaseHelper;
 
 import static se.pjodd.glada.R.id.map;
@@ -138,7 +144,18 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             if (updateLocationCircle) {
                 updateLocationCircle();
             }
+
+            Message message = Message.obtain(null, TrackerService.REQUEST_GRID_DATA_DELTA, 1, 1);
+            message.replyTo = serviceResultMessenger;
+            try {
+                msgService.send(message);
+            } catch (android.os.RemoteException re) {
+                Log.e("MapsActivity", "Unable to request grid data delta", re);
+            }
+
         }
+
+
     };
 
     private Location lastKnownLocation;
@@ -191,10 +208,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         pdopMeter.setMax(500);
         setPdopMeter(null);
 
-
-
-        startService(new Intent(this, TrackerService.class));
-
+        Intent intent = new Intent(this, TrackerService.class);
+        bindService(intent, connection, Context.BIND_AUTO_CREATE);
+        startService(intent);
     }
 
     @Override
@@ -227,6 +243,14 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         registerReceiver(wifiReceiver, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
         wifiManager.startScan();
+
+        Message message = Message.obtain(null, TrackerService.REQUEST_GRID_DATA, 1, 1);
+        message.replyTo = serviceResultMessenger;
+        try {
+            msgService.send(message);
+        } catch (android.os.RemoteException re) {
+            Log.e("MapsActivity", "Unable to request grid data", re);
+        }
 
 
     }
@@ -284,5 +308,80 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
+    private Messenger msgService;
+    private boolean isBound;
+    private ServiceConnection connection = new ServiceConnection() {
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            isBound = false;
+        }
 
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            isBound = true;
+            msgService = new Messenger(service);
+        }
+    };
+
+    Messenger serviceResultMessenger = new Messenger(new ServiceResultHandler());
+
+    private class ServiceResultHandler extends Handler {
+        @Override
+        public void handleMessage(Message msg) {
+            super.handleMessage(msg);
+            long cellIdentity = msg.getData().getLong("cellIdentity");
+            long timestamp = msg.getData().getLong("timestamp");
+            float accuracy = msg.getData().getFloat("accuracy");
+            int dBm = msg.getData().getInt("dBm");
+            double pdop = msg.getData().getDouble("pdop");
+
+            GridCellData cellData = data.get(cellIdentity);
+            if (cellData != null) {
+                cellData.getPolygon().remove();
+                cellData.setTimestamp(timestamp);
+                cellData.setAccuracy(accuracy);
+                cellData.setdBm(dBm);
+                cellData.setPdop(pdop);
+            } else {
+                cellData = new GridCellData();
+                cellData.setTimestamp(timestamp);
+                cellData.setAccuracy(accuracy);
+                cellData.setdBm(dBm);
+                cellData.setPdop(pdop);
+                data.put(cellIdentity, cellData);
+            }
+
+            Grid.Cell cell = grid.getCell(cellIdentity);
+            Grid.Envelope envelope = cell.getEnvelope();
+
+            PolygonOptions polygonOptions = new PolygonOptions();
+            polygonOptions.add(
+                    new LatLng(envelope.getSouthwest().getLatitude(), envelope.getSouthwest().getLongitude()),
+                    new LatLng(envelope.getNortheast().getLatitude(), envelope.getSouthwest().getLongitude()),
+                    new LatLng(envelope.getNortheast().getLatitude(), envelope.getNortheast().getLongitude()),
+                    new LatLng(envelope.getSouthwest().getLatitude(), envelope.getNortheast().getLongitude()),
+                    new LatLng(envelope.getSouthwest().getLatitude(), envelope.getSouthwest().getLongitude())
+            );
+            int color = Gradient.TEN[WifiManager.calculateSignalLevel(cellData.getdBm(), 10)];
+            polygonOptions.fillColor(color);
+            polygonOptions.strokeColor(color);
+            polygonOptions.strokeWidth(1); // px
+            cellData.setPolygon(mMap.addPolygon(polygonOptions));
+        }
+    }
+
+    private Grid grid = new Grid(0.003d);
+    private Map<Long, GridCellData> data = new HashMap<>();
+
+    private static class GridCellData extends se.pjodd.glada.GridCellData {
+        private Polygon polygon;
+
+        public Polygon getPolygon() {
+            return polygon;
+        }
+
+        public void setPolygon(Polygon polygon) {
+            this.polygon = polygon;
+        }
+    }
 }

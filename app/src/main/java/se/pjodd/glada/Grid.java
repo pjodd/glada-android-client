@@ -147,7 +147,7 @@ public class Grid {
         return result;
     }
 
-    private static class Coordinate {
+    public static class Coordinate {
         private double latitude;
         private double longitude;
 
@@ -196,7 +196,7 @@ public class Grid {
         }
     }
 
-    private static class Envelope {
+    public static class Envelope {
         private Coordinate southwest;
         private Coordinate northeast;
 
@@ -208,7 +208,7 @@ public class Grid {
             this.northeast = northeast;
         }
 
-        private Coordinate getSouthwest() {
+        public Coordinate getSouthwest() {
             return southwest;
         }
 
@@ -216,13 +216,14 @@ public class Grid {
             this.southwest = southwest;
         }
 
-        private Coordinate getNortheast() {
+        public Coordinate getNortheast() {
             return northeast;
         }
 
         private void setNortheast(Coordinate northeast) {
             this.northeast = northeast;
         }
+
     }
 
 

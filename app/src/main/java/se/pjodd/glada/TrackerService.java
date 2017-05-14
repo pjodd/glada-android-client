@@ -3,6 +3,7 @@ package se.pjodd.glada;
 import android.app.Service;
 import android.content.ContentValues;
 import android.content.Intent;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.wifi.ScanResult;
 import android.os.Handler;
@@ -10,10 +11,13 @@ import android.os.IBinder;
 import android.os.Message;
 import android.os.Messenger;
 import android.os.RemoteException;
+import android.provider.ContactsContract;
 import android.util.Log;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -120,6 +124,7 @@ public class TrackerService extends Service {
                             Log.e("TrackerService", "Unable to send grid data message", re);
                         }
                     }
+                    trackerService.gridDataDelta.clear();
                 }
 
             } else if (requestMessage.what == REQUEST_GRID_DATA_DELTA) {
@@ -151,7 +156,46 @@ public class TrackerService extends Service {
         messenger = new Messenger(new IncomingRequestHandler(this));
         databaseHelper = new DatabaseHelper(getApplicationContext());
 
-        // todo load grid data from database
+        // load grid data from database
+        {
+            db = databaseHelper.getWritableDatabase();
+            String[] projection = {
+                    DatabaseContract.Entry.COLUMN_NAME_TIMESTAMP,
+                    DatabaseContract.Entry.COLUMN_NAME_LATITUDE,
+                    DatabaseContract.Entry.COLUMN_NAME_LONGITUDE,
+                    DatabaseContract.Entry.COLUMN_NAME_ACCURACY,
+                    DatabaseContract.Entry.COLUMN_NAME_PDOP,
+                    DatabaseContract.Entry.COLUMN_NAME_DBM,
+            };
+
+            String sortOrder = DatabaseContract.Entry.COLUMN_NAME_TIMESTAMP + " DESC";
+            Cursor cursor = db.query(
+                    DatabaseContract.Entry.TABLE_NAME,        // The table to query
+                    projection,                               // The columns to return
+                    null,                                     // The columns for the WHERE clause
+                    null,                                     // The values for the WHERE clause
+                    null,                                     // don't group the rows
+                    null,                                     // don't filter by row groups
+                    sortOrder                                 // The sort order
+            );
+
+            while(cursor.moveToNext()) {
+                updateGridData(
+                        cursor.getLong(cursor.getColumnIndexOrThrow(DatabaseContract.Entry.COLUMN_NAME_TIMESTAMP)),
+                        cursor.getDouble(cursor.getColumnIndexOrThrow(DatabaseContract.Entry.COLUMN_NAME_LATITUDE)),
+                        cursor.getDouble(cursor.getColumnIndexOrThrow(DatabaseContract.Entry.COLUMN_NAME_LONGITUDE)),
+                        cursor.getFloat(cursor.getColumnIndexOrThrow(DatabaseContract.Entry.COLUMN_NAME_ACCURACY)),
+                        cursor.getDouble(cursor.getColumnIndexOrThrow(DatabaseContract.Entry.COLUMN_NAME_PDOP)),
+                        cursor.getInt(cursor.getColumnIndexOrThrow(DatabaseContract.Entry.COLUMN_NAME_DBM))
+                );
+            }
+            cursor.close();
+
+            db.close();
+        }
+
+        enable();
+
     }
 
     @Override
@@ -194,31 +238,7 @@ public class TrackerService extends Service {
                     db.insert(DatabaseContract.Entry.TABLE_NAME, null, values);
 
                     // add to grid and prepare to send to client
-                    Grid.Cell cell = grid.getCell(position.getLatitude(), position.getLongitude());
-                    GridCellData cellData = gridData.get(cell.getIdentity());
-                    if (cellData == null) {
-                        cellData = new GridCellData();
-                        cellData.setAccuracy(position.getAccuracy());
-                        cellData.setdBm(scanResult.level);
-                        cellData.setTimestamp(timestamp);
-                        cellData.setPdop(position.getPdop());
-                        synchronized (gridData) {
-                            gridData.put(cell.getIdentity(), cellData);
-                        }
-                        synchronized (gridDataDelta) {
-                            gridDataDelta.put(cell.getIdentity(), cellData);
-                        }
-                    } else if (cellData.getAccuracy() >= position.getAccuracy()) {
-                        synchronized (gridData) {
-                            cellData.setAccuracy(position.getAccuracy());
-                            cellData.setdBm(scanResult.level);
-                            cellData.setTimestamp(timestamp);
-                            cellData.setPdop(position.getPdop());
-                        }
-                        synchronized (gridDataDelta) {
-                            gridDataDelta.put(cell.getIdentity(), cellData);
-                        }
-                    }
+                    updateGridData(timestamp, position.getLatitude(), position.getLongitude(), position.getAccuracy(), position.getPdop(), scanResult.level);
                 }
             };
 
@@ -245,5 +265,30 @@ public class TrackerService extends Service {
         }
     }
 
+    private void updateGridData(long timestamp, double latitude, double longitude, float accuracy, double pdop, int dBm) {
+        Grid.Cell cell = grid.getCell(latitude, longitude);
+        synchronized (gridData) {
+            GridCellData cellData = gridData.get(cell.getIdentity());
+            if (cellData == null) {
+                cellData = new GridCellData();
+                cellData.setAccuracy(accuracy);
+                cellData.setdBm(dBm);
+                cellData.setTimestamp(timestamp);
+                cellData.setPdop(pdop);
+                gridData.put(cell.getIdentity(), cellData);
+                synchronized (gridDataDelta) {
+                    gridDataDelta.put(cell.getIdentity(), cellData);
+                }
+            } else if (cellData.getAccuracy() >= accuracy) {
+                cellData.setAccuracy(accuracy);
+                cellData.setdBm(dBm);
+                cellData.setTimestamp(timestamp);
+                cellData.setPdop(pdop);
+                synchronized (gridDataDelta) {
+                    gridDataDelta.put(cell.getIdentity(), cellData);
+                }
+            }
+        }
+    }
 
 }

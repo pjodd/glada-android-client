@@ -73,18 +73,26 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
             pdop = 100d;
         }
         pdopMeter.setProgress((int) (pdop * 100d));
-        if (pdop >= 5) {
-            pdopMeter.getProgressDrawable().setColorFilter(Color.rgb(0xff, 0x00, 0x00), android.graphics.PorterDuff.Mode.SRC_IN);
+        if (pdop >= 4.5) {
+            pdopMeter.getProgressDrawable().setColorFilter(Gradient.TEN_GREEN_YELLOW_RED[9], android.graphics.PorterDuff.Mode.SRC_IN);
         } else if (pdop >= 4) {
-            pdopMeter.getProgressDrawable().setColorFilter(Color.rgb(0xff, 0x66, 0x00), android.graphics.PorterDuff.Mode.SRC_IN);
+            pdopMeter.getProgressDrawable().setColorFilter(Gradient.TEN_GREEN_YELLOW_RED[8], android.graphics.PorterDuff.Mode.SRC_IN);
+        } else if (pdop >= 3.5) {
+            pdopMeter.getProgressDrawable().setColorFilter(Gradient.TEN_GREEN_YELLOW_RED[7], android.graphics.PorterDuff.Mode.SRC_IN);
         } else if (pdop >= 3) {
-            pdopMeter.getProgressDrawable().setColorFilter(Color.rgb(0xff, 0xcc, 0x00), android.graphics.PorterDuff.Mode.SRC_IN);
+            pdopMeter.getProgressDrawable().setColorFilter(Gradient.TEN_GREEN_YELLOW_RED[6], android.graphics.PorterDuff.Mode.SRC_IN);
+        } else if (pdop >= 2.5) {
+            pdopMeter.getProgressDrawable().setColorFilter(Gradient.TEN_GREEN_YELLOW_RED[5], android.graphics.PorterDuff.Mode.SRC_IN);
         } else if (pdop >= 2) {
-            pdopMeter.getProgressDrawable().setColorFilter(Color.rgb(0xcb, 0xff, 0x00), android.graphics.PorterDuff.Mode.SRC_IN);
+            pdopMeter.getProgressDrawable().setColorFilter(Gradient.TEN_GREEN_YELLOW_RED[4], android.graphics.PorterDuff.Mode.SRC_IN);
+        } else if (pdop >= 1.5) {
+            pdopMeter.getProgressDrawable().setColorFilter(Gradient.TEN_GREEN_YELLOW_RED[3], android.graphics.PorterDuff.Mode.SRC_IN);
         } else if (pdop >= 1) {
-            pdopMeter.getProgressDrawable().setColorFilter(Color.rgb(0x65, 0xff, 0x00), android.graphics.PorterDuff.Mode.SRC_IN);
+            pdopMeter.getProgressDrawable().setColorFilter(Gradient.TEN_GREEN_YELLOW_RED[2], android.graphics.PorterDuff.Mode.SRC_IN);
+        } else if (pdop >= 0.5) {
+            pdopMeter.getProgressDrawable().setColorFilter(Gradient.TEN_GREEN_YELLOW_RED[1], android.graphics.PorterDuff.Mode.SRC_IN);
         } else {
-            pdopMeter.getProgressDrawable().setColorFilter(Color.rgb(0x00, 0xff, 0x00), android.graphics.PorterDuff.Mode.SRC_IN);
+            pdopMeter.getProgressDrawable().setColorFilter(Gradient.TEN_GREEN_YELLOW_RED[0], android.graphics.PorterDuff.Mode.SRC_IN);
         }
 
     }

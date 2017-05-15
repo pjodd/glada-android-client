@@ -8,7 +8,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
-import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Color;
 import android.location.Location;
 import android.location.LocationListener;
@@ -19,11 +18,15 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
 import android.os.Messenger;
+import android.os.RemoteException;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
-import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.Toolbar;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -42,33 +45,29 @@ import com.google.android.gms.maps.model.PolygonOptions;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import se.pjodd.glada.db.DatabaseHelper;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static se.pjodd.glada.R.id.map;
 
-public class MainActivity extends FragmentActivity implements OnMapReadyCallback {
+public class MapActivity extends AppCompatActivity implements OnMapReadyCallback {
 
     private boolean pjoddInRange = false;
-
-    private DatabaseHelper databaseHelper;
-    private SQLiteDatabase db;
 
     private WifiManager wifiManager;
 
     private LocationManager locationManager;
 
-    private GoogleMap mMap;
+    private GoogleMap googleMap;
     private Circle locationCircle;
 
     private ProgressBar pdopMeter;
-    private TextView pdopLabel;
+    private ProgressBar accuracyMeter;
 
-    private TextView accuracyLabel;
+    private Toolbar toolBar;
+
+    private AtomicBoolean trackingServiceEnabled = new AtomicBoolean(false);
 
     private void setPdopMeter(Double pdop) {
-
-        pdopLabel.setText("pdop: " + String.valueOf(pdop));
 
         if (pdop == null) {
             pdop = 100d;
@@ -90,6 +89,25 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
 
     }
 
+    private void setAccuracyMeter(Float accuracyMeters) {
+
+        int accuracy;
+        if (accuracyMeters == null) {
+            accuracy = Integer.MAX_VALUE;
+        } else {
+            accuracy = accuracyMeters.intValue();
+        }
+
+        if (accuracy > accuracyMeter.getMax()) {
+            accuracy = accuracyMeter.getMax();
+        }
+
+        accuracyMeter.setProgress(accuracy);
+        accuracyMeter.getProgressDrawable().setColorFilter(Gradient.TEN_GREEN_YELLOW_RED[accuracy - 1], android.graphics.PorterDuff.Mode.SRC_IN);
+
+
+    }
+
     private NmeaParserListener nmeaListener = new NmeaParserListener() {
         @Override
         public void onNmeaReceived(long timestamp, String nmeaSentence) {
@@ -100,12 +118,8 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
 
     private LocationListener locationListener = new LocationListener() {
         public void onLocationChanged(Location location) {
-
-            accuracyLabel.setText("accuracy: " + String.valueOf(location.getAccuracy()));
-
-            lastKnownLocation = location;
-            updateLocationCircle();
-
+            updateLocation(location);
+            setAccuracyMeter(location.getAccuracy());
         }
 
         public void onStatusChanged(String provider, int status, Bundle extras) {
@@ -139,19 +153,19 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
 
             }
 
-            boolean updateLocationCircle = MainActivity.this.pjoddInRange != pjoddInRange;
-            MainActivity.this.pjoddInRange = pjoddInRange;
+            boolean updateLocationCircle = MapActivity.this.pjoddInRange != pjoddInRange;
+            MapActivity.this.pjoddInRange = pjoddInRange;
             if (updateLocationCircle) {
-                updateLocationCircle();
+                updateLocation(lastKnownLocation);
             }
             // todo this should never be null!!! but it is
-            if (msgService != null) {
+            if (trackerServiceMessenger != null) {
                 Message message = Message.obtain(null, TrackerService.REQUEST_GRID_DATA_DELTA, 1, 1);
                 message.replyTo = gridDataMessenger;
                 try {
-                    msgService.send(message);
+                    trackerServiceMessenger.send(message);
                 } catch (android.os.RemoteException re) {
-                    Log.e("MainActivity", "Unable to request grid data delta", re);
+                    Log.e("MapActivity", "Unable to request grid data delta", re);
                 }
             }
 
@@ -162,17 +176,25 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
 
     private Location lastKnownLocation;
 
-    private void updateLocationCircle() {
-        updateLocationCircle(lastKnownLocation);
-    }
-
-    private void updateLocationCircle(Location location) {
+    private void updateLocation(Location location) {
 
         if (location == null) {
             return;
         }
 
-        if (mMap != null) {
+        if (googleMap != null) {
+
+            if (lastKnownLocation == null) {
+                CameraPosition cameraPosition = new CameraPosition.Builder()
+                        .target(new LatLng(location.getLatitude(), location.getLongitude()))      // Sets the center of the map to malmö
+                        .zoom(17)                   // Sets the zoom
+                        .zoom(17)                   // Sets the zoom
+                        .bearing(90)                // Sets the orientation of the camera to east
+                        .tilt(40)                   // Sets the tilt of the camera to 30 degrees
+                        .build();                   // Creates a CameraPosition from the builder
+                googleMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
+            }
+
             if (locationCircle != null) {
                 locationCircle.remove();
             }
@@ -182,18 +204,16 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                     .radius(location.getAccuracy())
                     .strokeColor(Color.BLACK);
 
-            // 0x represents, this is an hexadecimal code
-            // 55 represents percentage of transparency. For 100% transparency, specify 00.
-            // For 0% transparency ( ie, opaque ) , specify ff
-            // The remaining 6 characters(00ff00) specify the fill color
             if (pjoddInRange) {
                 circleOptions.fillColor(0x5500ff00);
             } else {
                 circleOptions.fillColor(0x55ff0000);
             }
 
-            locationCircle = mMap.addCircle(circleOptions);
+            locationCircle = googleMap.addCircle(circleOptions);
         }
+
+        lastKnownLocation = location;
     }
 
     @Override
@@ -206,16 +226,19 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                 .findFragmentById(map);
         mapFragment.getMapAsync(this);
 
-        accuracyLabel = (TextView) findViewById(R.id.accuracyLabel);
-
-        pdopLabel = (TextView) findViewById(R.id.pdopLabel);
-
         pdopMeter = (ProgressBar) findViewById(R.id.pdopMeter);
-        pdopMeter.setMax(500);
+        pdopMeter.setMax(500); // todo from settings
         setPdopMeter(null);
 
+        accuracyMeter = (ProgressBar) findViewById(R.id.accuracyMeter);
+        accuracyMeter.setMax(10); // todo from settings
+        setAccuracyMeter(null);
+
+        toolBar = (Toolbar) findViewById(R.id.toolbar);
+        setSupportActionBar(toolBar);
+
         Intent intent = new Intent(this, TrackerService.class);
-        bindService(intent, connection, Context.BIND_AUTO_CREATE);
+        bindService(intent, trackerServiceConnection, Context.BIND_AUTO_CREATE);
         startService(intent);
     }
 
@@ -224,9 +247,6 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         super.onResume();
 
         pjoddInRange = false;
-
-        databaseHelper = new DatabaseHelper(getApplicationContext());
-        db = databaseHelper.getWritableDatabase();
 
         wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         locationManager = (LocationManager) getApplicationContext().getSystemService(Context.LOCATION_SERVICE);
@@ -241,8 +261,7 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
             return;
         }
 
-        lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-        updateLocationCircle();
+        updateLocation(locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER));
 
         locationManager.addNmeaListener(nmeaListener);
         locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 1, locationListener);
@@ -260,12 +279,15 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         locationManager.removeUpdates(locationListener);
         locationManager.removeNmeaListener(nmeaListener);
         unregisterReceiver(wifiReceiver);
-        db.close();
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (isBound) {
+            unbindService(trackerServiceConnection);
+            isBound = false;
+        }
     }
 
     /**
@@ -278,34 +300,17 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
      */
     @Override
     public void onMapReady(GoogleMap googleMap) {
-        mMap = googleMap;
+        this.googleMap = googleMap;
 
         if (lastKnownLocation != null) {
-
-            updateLocationCircle();
-
-            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude()), 13));
-
             CameraPosition cameraPosition = new CameraPosition.Builder()
-                    .target(new LatLng(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude()))      // Sets the center of the map to location user
+                    .target(new LatLng(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude()))      // Sets the center of the map to malmö
                     .zoom(17)                   // Sets the zoom
                     .bearing(90)                // Sets the orientation of the camera to east
                     .tilt(40)                   // Sets the tilt of the camera to 30 degrees
                     .build();                   // Creates a CameraPosition from the builder
-            mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
-        } else {
-            // zoom to malmö
-
-            CameraPosition cameraPosition = new CameraPosition.Builder()
-                    .target(new LatLng(55.6d, 13d))      // Sets the center of the map to malmö
-                    .zoom(15)                   // Sets the zoom
-                    .bearing(90)                // Sets the orientation of the camera to east
-                    .tilt(40)                   // Sets the tilt of the camera to 30 degrees
-                    .build();                   // Creates a CameraPosition from the builder
-            mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
-
+            googleMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
         }
-
     }
 
 
@@ -319,9 +324,9 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
-    private Messenger msgService;
+    private Messenger trackerServiceMessenger;
     private boolean isBound;
-    private ServiceConnection connection = new ServiceConnection() {
+    private ServiceConnection trackerServiceConnection = new ServiceConnection() {
         @Override
         public void onServiceDisconnected(ComponentName name) {
             isBound = false;
@@ -330,32 +335,58 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
             isBound = true;
-            msgService = new Messenger(service);
-
+            trackerServiceMessenger = new Messenger(service);
             requestAllGridData();
         }
     };
 
-    Messenger gridDataMessenger = new Messenger(new GridDataHandler(this));
+    private Messenger trackingServiceStatusMessenger = new Messenger(new TrackingServiceStatusHandler(this));
 
-    private static class GridDataHandler extends Handler {
+    private static class TrackingServiceStatusHandler extends Handler {
+        private MapActivity mapActivity;
 
-        private MainActivity mainActivity;
-
-        public GridDataHandler(MainActivity mainActivity) {
-            this.mainActivity = mainActivity;
+        public TrackingServiceStatusHandler(MapActivity mapActivity) {
+            this.mapActivity = mapActivity;
         }
 
         @Override
-        public void handleMessage(Message msg) {
-            super.handleMessage(msg);
-            long cellIdentity = msg.getData().getLong("cellIdentity");
-            long timestamp = msg.getData().getLong("timestamp");
-            float accuracy = msg.getData().getFloat("accuracy");
-            int dBm = msg.getData().getInt("dBm");
-            double pdop = msg.getData().getDouble("pdop");
+        public void handleMessage(Message message) {
+            super.handleMessage(message);
+            mapActivity.trackingServiceEnabled.set(message.getData().getBoolean("enabled"));
+            String errorMessage = message.getData().getString("errorMessage");
+            if (errorMessage != null) {
+                // todo
+            }
+            MenuItem trackingMenuItem = mapActivity.toolBar.getMenu().findItem(R.id.action_enable_disable_tracking);
+            if (mapActivity.trackingServiceEnabled.get()) {
+                trackingMenuItem.setTitle("Disable tracking");
+            } else {
+                trackingMenuItem.setTitle("Enable tracking");
+            }
 
-            GridCellData cellData = mainActivity.gridData.get(cellIdentity);
+        }
+    }
+
+    private Messenger gridDataMessenger = new Messenger(new GridDataHandler(this));
+
+    private static class GridDataHandler extends Handler {
+
+        private MapActivity mapActivity;
+
+        public GridDataHandler(MapActivity mapActivity) {
+            this.mapActivity = mapActivity;
+        }
+
+        @Override
+        public void handleMessage(Message message) {
+            super.handleMessage(message);
+            long cellIdentity = message.getData().getLong("cellIdentity");
+            long timestamp = message.getData().getLong("timestamp");
+            float accuracy = message.getData().getFloat("accuracy");
+            int dBm = message.getData().getInt("dBm");
+            double pdop = message.getData().getDouble("pdop");
+
+            GridCellData cellData = mapActivity.gridData.get(cellIdentity);
             if (cellData != null) {
                 cellData.getPolygon().remove();
                 cellData.setTimestamp(timestamp);
@@ -368,10 +399,10 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                 cellData.setAccuracy(accuracy);
                 cellData.setdBm(dBm);
                 cellData.setPdop(pdop);
-                mainActivity.gridData.put(cellIdentity, cellData);
+                mapActivity.gridData.put(cellIdentity, cellData);
             }
 
-            Grid.Cell cell = mainActivity.grid.getCell(cellIdentity);
+            Grid.Cell cell = mapActivity.grid.getCell(cellIdentity);
             Grid.Envelope envelope = cell.getEnvelope();
 
             PolygonOptions polygonOptions = new PolygonOptions();
@@ -386,7 +417,7 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
             polygonOptions.fillColor(color);
             polygonOptions.strokeColor(color);
             polygonOptions.strokeWidth(1); // px
-            cellData.setPolygon(mainActivity.mMap.addPolygon(polygonOptions));
+            cellData.setPolygon(mapActivity.googleMap.addPolygon(polygonOptions));
         }
     }
 
@@ -409,9 +440,59 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         Message message = Message.obtain(null, TrackerService.REQUEST_GRID_DATA, 1, 1);
         message.replyTo = gridDataMessenger;
         try {
-            msgService.send(message);
+            trackerServiceMessenger.send(message);
         } catch (android.os.RemoteException re) {
-            Log.e("MainActivity", "Unable to request grid data", re);
+            Log.e("MapActivity", "Unable to request grid data", re);
         }
     }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_map, menu);//Menu Resource, Menu
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case R.id.action_settings:
+                startActivity(new Intent(this, SettingsActivity.class));
+                return true;
+
+            case R.id.action_enable_disable_tracking:
+                Message message;
+                if (trackingServiceEnabled.get()) {
+                    message = Message.obtain(null, TrackerService.DISABLE_SERVICE, 1, 1);
+                } else {
+                    message = Message.obtain(null, TrackerService.ENABLE_SERVICE, 1, 1);
+                }
+                message.replyTo = trackingServiceStatusMessenger;
+                try {
+                    trackerServiceMessenger.send(message);
+                } catch (RemoteException re) {
+                    Log.e("MapActivity", "Unable to send enable/disable tracking service", re);
+                }
+                return true;
+
+            case R.id.action_zoom_to_my_location:
+                if (lastKnownLocation != null) {
+                    CameraPosition cameraPosition = new CameraPosition.Builder()
+                            .target(new LatLng(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude()))      // Sets the center of the map to malmö
+                            .zoom(17)                   // Sets the zoom
+                            .zoom(17)                   // Sets the zoom
+                            .bearing(90)                // Sets the orientation of the camera to east
+                            .tilt(40)                   // Sets the tilt of the camera to 30 degrees
+                            .build();                   // Creates a CameraPosition from the builder
+                    googleMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
+                }
+                return true;
+
+            default:
+                // If we got here, the user's action was not recognized.
+                // Invoke the superclass to handle it.
+                return super.onOptionsItemSelected(item);
+
+        }
+    }
+
 }

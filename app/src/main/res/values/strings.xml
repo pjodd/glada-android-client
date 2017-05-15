@@ -1,4 +1,26 @@
 <resources>
     <string name="app_name">Glada</string>
     <string name="title_activity_maps">Glada</string>
+    <string name="title_activity_settings">Settings</string>
+
+    <string name="pref_default_phone_identity">NOT ASSIGNED</string>
+    <string name="pref_default_ssid">pjodd.se</string>
+    <string name="pref_default_channel">1</string>
+    <string name="pref_default_maximum_accuracy">10</string>
+    <string name="pref_default_maximum_pdop">4</string>
+    <string name="pref_default_server_url">http://glada.pjodd.se/api</string>
+    <string name="pref_title_phone_identity">Phone identity</string>
+    <string name="pref_title_channel">WiFi channel</string>
+    <string name="pref_title_ssid">WiFi name (SSID)</string>
+    <string name="pref_title_maximum_accuracy">Maximum accuracy meters</string>
+    <string name="pref_title_maximum_pdop">Maximum dilution of precision</string>
+    <string name="pref_title_server_url">Server URL</string>
+    <string name="pref_header_general">General</string>
+    <string name="pref_header_sensors">Sensors</string>
+    <string name="pref_header_server">Server</string>
+
+    <string name="enable_tracking">Enable tracking</string>
+    <string name="disable_tracking">Disable tracking</string>
+    <string name="zoom_to_my_location">Zoom to my location</string>
+    <string name="settings">Settings</string>
 </resources>

@@ -1,24 +1,27 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="fill_parent"
     android:layout_height="fill_parent"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:orientation="vertical">
 
-
-    <TextView
-        android:id="@+id/pdopLabel"
-        android:layout_width="wrap_content"
+    <android.support.v7.widget.Toolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginRight="10dp"
-        android:text="pdop: null" />
-
-    <TextView
-        android:id="@+id/accuracyLabel"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="accuracy: null" />
+        android:background="?attr/colorPrimary"
+        android:elevation="4dp"
+        android:theme="@style/ThemeOverlay.AppCompat.ActionBar"
+        app:popupTheme="@style/ThemeOverlay.AppCompat.Light"/>
 
     <ProgressBar xmlns:android="http://schemas.android.com/apk/res/android"
         android:id="@+id/pdopMeter"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="visible" />
+
+    <ProgressBar xmlns:android="http://schemas.android.com/apk/res/android"
+        android:id="@+id/accuracyMeter"
         style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -32,7 +35,7 @@
         android:name="com.google.android.gms.maps.SupportMapFragment"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        tools:context="se.pjodd.glada.MainActivity" />
+        tools:context="se.pjodd.glada.MapActivity" />
 
 
 </LinearLayout>

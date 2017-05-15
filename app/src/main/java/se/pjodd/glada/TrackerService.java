@@ -67,47 +67,44 @@ public class TrackerService extends Service {
 
             if (requestMessage.what == ENABLE_SERVICE) {
 
-                Message enabledMessage = new Message();
+                Message statusResponse = new Message();
                 try {
                     trackerService.enable();
-                    enabledMessage.getData().putBoolean("enabled", true);
+                    statusResponse.getData().putBoolean("enabled", trackerService.enabled.get());
 
                 } catch (Exception e) {
                     Log.e("TrackerService", "Exception while enabling service", e);
-                    enabledMessage.getData().putBoolean("enabled", false);
-                    enabledMessage.getData().putString("message", e.getMessage());
+                    statusResponse.getData().putBoolean("enabled", trackerService.enabled.get());
+                    statusResponse.getData().putString("errorMessage", e.getMessage());
                 }
-
-                enabledMessage.getData().putInt("gridData.size", trackerService.gridData.size());
-                enabledMessage.getData().putInt("gridDataDelta.size", trackerService.gridDataDelta.size());
+                statusResponse.getData().putInt("gridData.size", trackerService.gridData.size());
+                statusResponse.getData().putInt("gridDataDelta.size", trackerService.gridDataDelta.size());
 
                 try {
-                    requestMessage.replyTo.send(enabledMessage);
+                    requestMessage.replyTo.send(statusResponse);
                 } catch (RemoteException re) {
-                    Log.e("TrackerService", "Unable to send enabled message", re);
+                    Log.e("TrackerService", "Unable to send status response after enabled request", re);
                 }
 
             } else if (requestMessage.what == DISABLE_SERVICE) {
-                Message disabledMessage = new Message();
+                Message statusResponse = new Message();
                 try {
                     trackerService.disable();
-                    disabledMessage.getData().putBoolean("disabled", true);
+                    statusResponse.getData().putBoolean("enabled", trackerService.enabled.get());
 
                 } catch (Exception e) {
                     Log.e("TrackerService", "Exception while disabling service", e);
-                    disabledMessage.getData().putBoolean("disabled", false);
-                    disabledMessage.getData().putString("message", e.getMessage());
+                    statusResponse.getData().putBoolean("enabled", trackerService.enabled.get());
+                    statusResponse.getData().putString("errorMessage", e.getMessage());
                 }
-
-                disabledMessage.getData().putInt("gridData.size", trackerService.gridData.size());
-                disabledMessage.getData().putInt("gridDataDelta.size", trackerService.gridDataDelta.size());
+                statusResponse.getData().putInt("gridData.size", trackerService.gridData.size());
+                statusResponse.getData().putInt("gridDataDelta.size", trackerService.gridDataDelta.size());
 
                 try {
-                    requestMessage.replyTo.send(disabledMessage);
+                    requestMessage.replyTo.send(statusResponse);
                 } catch (RemoteException re) {
-                    Log.e("TrackerService", "Unable to send disable message", re);
+                    Log.e("TrackerService", "Unable to send status response after disable request", re);
                 }
-
 
             } else if (requestMessage.what == REQUEST_GRID_DATA) {
                 synchronized (trackerService.gridData) {
@@ -194,7 +191,7 @@ public class TrackerService extends Service {
             db.close();
         }
 
-        enable();
+//        enable();
 
     }
 
@@ -213,40 +210,44 @@ public class TrackerService extends Service {
             }
 
             db = databaseHelper.getWritableDatabase();
+            try {
+                wifiManager = new TemporalLocationAwareWiFiManager(getApplicationContext()) {
+                    @Override
+                    public boolean accept(long timestamp, ScanResult scanResult) {
+                        return (TemporalLocationAwareWiFiManager.convertFrequencyToChannel(scanResult.frequency) == 1
+                                && "pjodd.se".equals(scanResult.SSID));
+                    }
 
-            wifiManager = new TemporalLocationAwareWiFiManager(getApplicationContext()) {
-                @Override
-                public boolean accept(long timestamp, ScanResult scanResult) {
-                    return (TemporalLocationAwareWiFiManager.convertFrequencyToChannel(scanResult.frequency) == 1
-                            && "pjodd.se".equals(scanResult.SSID));
+                    @Override
+                    public void onReceive(long timestamp, ScanResult scanResult, TemporalLocationManager.Position position) {
+
+                        // store in database
+                        ContentValues values = new ContentValues();
+                        values.put(DatabaseContract.Entry.COLUMN_NAME_TIMESTAMP, timestamp);
+                        values.put(DatabaseContract.Entry.COLUMN_NAME_SSID, scanResult.SSID);
+                        values.put(DatabaseContract.Entry.COLUMN_NAME_BSSID, scanResult.BSSID);
+                        values.put(DatabaseContract.Entry.COLUMN_NAME_DBM, scanResult.level);
+                        values.put(DatabaseContract.Entry.COLUMN_NAME_FREQUENCY, scanResult.frequency);
+                        values.put(DatabaseContract.Entry.COLUMN_NAME_LATITUDE, position.getLatitude());
+                        values.put(DatabaseContract.Entry.COLUMN_NAME_LONGITUDE, position.getLongitude());
+                        values.put(DatabaseContract.Entry.COLUMN_NAME_ACCURACY, position.getAccuracy());
+                        values.put(DatabaseContract.Entry.COLUMN_NAME_PDOP, position.getPdop());
+                        db.insert(DatabaseContract.Entry.TABLE_NAME, null, values);
+
+                        // add to grid and prepare to send to client
+                        updateGridData(timestamp, position.getLatitude(), position.getLongitude(), position.getAccuracy(), position.getPdop(), scanResult.level);
+                    }
+                };
+
+                if (!wifiManager.start()) {
+                    throw new RuntimeException("Unable to start location aware WiFi manager!");
                 }
-
-                @Override
-                public void onReceive(long timestamp, ScanResult scanResult, TemporalLocationManager.Position position) {
-
-                    // store in database
-                    ContentValues values = new ContentValues();
-                    values.put(DatabaseContract.Entry.COLUMN_NAME_TIMESTAMP, timestamp);
-                    values.put(DatabaseContract.Entry.COLUMN_NAME_SSID, scanResult.SSID);
-                    values.put(DatabaseContract.Entry.COLUMN_NAME_BSSID, scanResult.BSSID);
-                    values.put(DatabaseContract.Entry.COLUMN_NAME_DBM, scanResult.level);
-                    values.put(DatabaseContract.Entry.COLUMN_NAME_FREQUENCY, scanResult.frequency);
-                    values.put(DatabaseContract.Entry.COLUMN_NAME_LATITUDE, position.getLatitude());
-                    values.put(DatabaseContract.Entry.COLUMN_NAME_LONGITUDE, position.getLongitude());
-                    values.put(DatabaseContract.Entry.COLUMN_NAME_ACCURACY, position.getAccuracy());
-                    values.put(DatabaseContract.Entry.COLUMN_NAME_PDOP, position.getPdop());
-                    db.insert(DatabaseContract.Entry.TABLE_NAME, null, values);
-
-                    // add to grid and prepare to send to client
-                    updateGridData(timestamp, position.getLatitude(), position.getLongitude(), position.getAccuracy(), position.getPdop(), scanResult.level);
-                }
-            };
-
-            if (!wifiManager.start()) {
-                throw new RuntimeException("Unable to start location aware WiFi manager!");
+            } catch (Exception e) {
+                db.close();
+                throw e;
             }
 
-            enabled.set(false);
+            enabled.set(true);
         }
     }
 

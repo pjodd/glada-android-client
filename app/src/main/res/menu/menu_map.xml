@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item android:id="@+id/action_enable_disable_tracking"
+        android:titleCondensed="Track"
+        android:title="@string/enable_tracking"
+        android:icon="@android:drawable/ic_menu_myplaces"
+        />
+
+    <item android:id="@+id/action_zoom_to_my_location"
+        android:titleCondensed="Zoom"
+        android:title="@string/zoom_to_my_location"
+        android:icon="@android:drawable/ic_menu_mylocation"
+        />
+
+    <!-- Settings, should always be in the overflow -->
+    <item android:id="@+id/action_settings"
+        android:title="@string/settings"
+        android:icon="@android:drawable/ic_menu_manage"
+        app:showAsAction="never"
+        />
+
+</menu>

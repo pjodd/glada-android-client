@@ -51,6 +51,7 @@ public class TrackerService extends Service {
 
     public static final int DISABLE_SERVICE = -2;
     public static final int ENABLE_SERVICE = -1;
+    public static final int REQUEST_STATUS = 0;
     public static final int REQUEST_GRID_DATA = 1;
     public static final int REQUEST_GRID_DATA_DELTA = 2;
 
@@ -65,7 +66,20 @@ public class TrackerService extends Service {
         @Override
         public void handleMessage(Message requestMessage) {
 
-            if (requestMessage.what == ENABLE_SERVICE) {
+            if (requestMessage.what == REQUEST_STATUS) {
+
+                Message statusResponse = new Message();
+                statusResponse.getData().putBoolean("enabled", trackerService.enabled.get());
+                statusResponse.getData().putInt("gridData.size", trackerService.gridData.size());
+                statusResponse.getData().putInt("gridDataDelta.size", trackerService.gridDataDelta.size());
+
+                try {
+                    requestMessage.replyTo.send(statusResponse);
+                } catch (RemoteException re) {
+                    Log.e("TrackerService", "Unable to send status response after enabled request", re);
+                }
+
+            } else if (requestMessage.what == ENABLE_SERVICE) {
 
                 Message statusResponse = new Message();
                 try {
@@ -176,7 +190,7 @@ public class TrackerService extends Service {
                     sortOrder                                 // The sort order
             );
 
-            while(cursor.moveToNext()) {
+            while (cursor.moveToNext()) {
                 updateGridData(
                         cursor.getLong(cursor.getColumnIndexOrThrow(DatabaseContract.Entry.COLUMN_NAME_TIMESTAMP)),
                         cursor.getDouble(cursor.getColumnIndexOrThrow(DatabaseContract.Entry.COLUMN_NAME_LATITUDE)),
@@ -191,7 +205,7 @@ public class TrackerService extends Service {
             db.close();
         }
 
-//        enable();
+        enable();
 
     }
 

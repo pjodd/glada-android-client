@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Location;
@@ -19,6 +20,7 @@ import android.os.IBinder;
 import android.os.Message;
 import android.os.Messenger;
 import android.os.RemoteException;
+import android.preference.PreferenceManager;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.os.Bundle;
@@ -228,6 +230,12 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // load default settings
+        PreferenceManager.setDefaultValues(this, R.xml.pref_general, false);
+        PreferenceManager.setDefaultValues(this, R.xml.pref_sensors, false);
+        PreferenceManager.setDefaultValues(this, R.xml.pref_server, false);
+
+
         setContentView(R.layout.activity_maps);
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
@@ -276,7 +284,6 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
 
         registerReceiver(wifiReceiver, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
         wifiManager.startScan();
-
 
 
     }
@@ -344,6 +351,7 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         public void onServiceConnected(ComponentName name, IBinder service) {
             isBound = true;
             trackerServiceMessenger = new Messenger(service);
+            requestStatus();
             requestAllGridData();
         }
     };
@@ -441,6 +449,16 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
 
         public void setPolygon(Polygon polygon) {
             this.polygon = polygon;
+        }
+    }
+
+    private void requestStatus() {
+        Message message = Message.obtain(null, TrackerService.REQUEST_STATUS, 1, 1);
+        message.replyTo = trackingServiceStatusMessenger;
+        try {
+            trackerServiceMessenger.send(message);
+        } catch (android.os.RemoteException re) {
+            Log.e("MapActivity", "Unable to request status", re);
         }
     }
 
